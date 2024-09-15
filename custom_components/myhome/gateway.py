@@ -142,12 +142,10 @@ class MyHOMEGatewayHandler:
         while not self._terminate_listener:
             message = await _event_session.get_next()
             LOGGER.debug("%s Message received: `%s`", self.log_id, message)
-
             # Workaround due to how the OWNd library creates the entity ID,
             # replacing zone=0 with zone=where_param
             if isinstance(message, OWNHeatingEvent) and message.where == "0":
                 message._zone = 0
-
             if self.generate_events:
                 if isinstance(message, OWNMessage):
                     _event_content = {"gateway": str(self.gateway.host)}
@@ -155,9 +153,8 @@ class MyHOMEGatewayHandler:
                     self.hass.bus.async_fire("myhome_message_event", _event_content)
                 else:
                     self.hass.bus.async_fire("myhome_message_event", {"gateway": str(self.gateway.host), "message": str(message)})
-
             if not isinstance(message, OWNMessage):
-                LOGGER.warning(
+                    LOGGER.warning(
                     "%s Data received is not a message: `%s`",
                     self.log_id,
                     message,
@@ -268,32 +265,34 @@ class MyHOMEGatewayHandler:
                                 },
                             )
                     if not is_event:
-                        if isinstance(message, OWNLightingEvent) and message.brightness_preset:
-                            if isinstance(
-                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][LIGHT][message.entity][CONF_ENTITIES][LIGHT],
-                                MyHOMEEntity,
-                            ):
-                                await self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][LIGHT][message.entity][CONF_ENTITIES][LIGHT].async_update()
-                        else:
-                            for _platform in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]:
-                                if _platform != BUTTON and message.entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform]:
-                                    for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES]:
-                                        if (
-                                            isinstance(
-                                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
-                                                MyHOMEEntity,
-                                            )
-                                            and not isinstance(
-                                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
-                                                DisableCommandButtonEntity,
-                                            )
-                                            and not isinstance(
-                                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
-                                                EnableCommandButtonEntity,
-                                            )
-                                        ):
-                                            self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity].handle_event(message)
-
+                        try:
+                            if isinstance(message, OWNLightingEvent) and message.brightness_preset:
+                                if isinstance(
+                                    self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][LIGHT][message.entity][CONF_ENTITIES][LIGHT],
+                                    MyHOMEEntity,
+                                ):
+                                    await self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][LIGHT][message.entity][CONF_ENTITIES][LIGHT].async_update()
+                            else:
+                                for _platform in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]:
+                                    if _platform != BUTTON and message.entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform]:
+                                        for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES]:
+                                            if (
+                                                isinstance(
+                                                    self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
+                                                    MyHOMEEntity,
+                                                )
+                                                and not isinstance(
+                                                    self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
+                                                    DisableCommandButtonEntity,
+                                                )
+                                                and not isinstance(
+                                                    self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
+                                                    EnableCommandButtonEntity,
+                                                )
+                                            ):
+                                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity].handle_event(message)
+                        except Exception as err:
+                            LOGGER.error(f"Exception while parsing !isEvent {err=}, {type(err)=}")
                 else:
                     LOGGER.debug(
                         "%s Ignoring translation message `%s`",
