@@ -286,9 +286,7 @@ class OWNSession:
                 (
                     self._stream_reader,
                     self._stream_writer,
-                ) = await asyncio.open_connection(
-                    self._gateway.address, self._gateway.port
-                )
+                ) = await asyncio.wait_for(asyncio.open_connection(self._gateway.address, self._gateway.port),timeout=5.0)
                 return await self._negotiate()
             except (ConnectionRefusedError, asyncio.IncompleteReadError):
                 self._logger.warning(
@@ -308,7 +306,15 @@ class OWNSession:
                 )
                 await asyncio.sleep(60)
                 retry_count += 1
-
+            except asyncio.TimeoutError:
+                self._logger.warning(
+                    "%s %s session connection timeout, retrying in 3s.",
+                    self._gateway.log_id,
+                    self._type.capitalize(),
+                )
+                await asyncio.sleep(3)
+                retry_count += 1
+                
     async def close(self) -> None:
         """Closes the connection to the OpenWebNet gateway"""
         self._stream_writer.close()
@@ -646,7 +652,8 @@ class OWNEventSession(OWNSession):
         """Acts as an entry point to read messages on the event bus.
         It will read one frame and return it as an OWNMessage object"""
         try:
-            data = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
+            data = await asyncio.wait_for(self._stream_reader.readuntil(OWNSession.SEPARATOR), timeout=5.0)
+            # data = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
             _decoded_data = data.decode()
             _message = OWNMessage.parse(_decoded_data)
             return _message if _message else _decoded_data
@@ -656,6 +663,19 @@ class OWNEventSession(OWNSession):
             )
             await self.connect()
             return None
+        except asyncio.TimeoutError:
+            self._logger.exception(
+                "%s Timeout error:",
+                self._gateway.log_id,
+            )
+            await self.connect()
+            return None
+        except asyncio.CancelledError:
+            self._logger.exception(
+                "%s Cancelled Error:",
+                self._gateway.log_id,
+            )
+            return None
         except AttributeError:
             self._logger.exception(
                 "%s Received data could not be parsed into a message:",
@@ -664,11 +684,12 @@ class OWNEventSession(OWNSession):
             return None
         except ConnectionError:
             self._logger.exception("%s Connection error:", self._gateway.log_id)
+            await self.connect()
             return None
         except Exception:  # pylint: disable=broad-except
             self._logger.exception("%s Event session crashed.", self._gateway.log_id)
+            await self.connect()
             return None
-
 
 class OWNCommandSession(OWNSession):
     def __init__(self, gateway: OWNGateway = None, logger: logging.Logger = None):
