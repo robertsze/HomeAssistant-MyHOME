@@ -275,6 +275,7 @@ class OWNSession:
         retry_timer = 1
 
         while True:
+            self._logger.debug("%s Connect try %s...", self._gateway.log_id, retry_count)
             try:
                 if retry_count > 4:
                     self._logger.error(
@@ -287,6 +288,11 @@ class OWNSession:
                     self._stream_reader,
                     self._stream_writer,
                 ) = await asyncio.wait_for(asyncio.open_connection(self._gateway.address, self._gateway.port),timeout=5.0)
+                self._logger.debug(
+                    "%s %s session connection successful, start negotiating.",
+                    self._gateway.log_id,
+                    self._type.capitalize(),
+                )
                 return await self._negotiate()
             except (ConnectionRefusedError, asyncio.IncompleteReadError):
                 self._logger.warning(
@@ -306,17 +312,37 @@ class OWNSession:
                 )
                 await asyncio.sleep(60)
                 retry_count += 1
+            except asyncio.CancelledError:
+                self._logger.warning(
+                    "%s %s session connection cancelled, aborting.",
+                    self._gateway.log_id,
+                    self._type.capitalize(),
+                )
+                return None
             except asyncio.TimeoutError:
                 self._logger.warning(
                     "%s %s session connection timeout, retrying in 3s.",
                     self._gateway.log_id,
                     self._type.capitalize(),
                 )
+                await self.close()
+                await asyncio.sleep(3)
+                retry_count += 1
+            except Exception as e:
+                self._logger.error(
+                    "%s %s session connection encountered an unexpected error: %s. Retrying in 3s.",
+                    self._gateway.log_id,
+                    self._type.capitalize(),
+                    str(e),
+                )
                 await asyncio.sleep(3)
                 retry_count += 1
                 
     async def close(self) -> None:
         """Closes the connection to the OpenWebNet gateway"""
+        self._logger.debug(
+            "%s %s session closing.", self._gateway.log_id, self._type.capitalize()
+        )
         self._stream_writer.close()
         await self._stream_writer.wait_closed()
         self._logger.debug(
@@ -664,10 +690,12 @@ class OWNEventSession(OWNSession):
             await self.connect()
             return None
         except asyncio.TimeoutError:
-            self._logger.exception(
-                "%s Timeout error:",
-                self._gateway.log_id,
+            self._logger.warning(
+                    "%s %s session timeout, reconnecting",
+                    self._gateway.log_id,
+                    self._type.capitalize(),
             )
+            await self.close()
             await self.connect()
             return None
         except asyncio.CancelledError:
