@@ -690,7 +690,7 @@ class OWNEventSession(OWNSession):
             await self.connect()
             return None
         except asyncio.TimeoutError:
-            self._logger.warning(
+            self._logger.debug(
                     "%s %s session timeout, reconnecting",
                     self._gateway.log_id,
                     self._type.capitalize(),
