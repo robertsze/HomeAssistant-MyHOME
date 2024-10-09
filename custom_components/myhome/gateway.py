@@ -154,7 +154,7 @@ class MyHOMEGatewayHandler:
                 else:
                     self.hass.bus.async_fire("myhome_message_event", {"gateway": str(self.gateway.host), "message": str(message)})
             if not isinstance(message, OWNMessage):
-                    LOGGER.warning(
+                    LOGGER.debug(
                     "%s Data received is not a message: `%s`",
                     self.log_id,
                     message,
