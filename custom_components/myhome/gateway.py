@@ -26,6 +26,11 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     DOMAIN as SENSOR,
 )
+from homeassistant.components.media_player import (
+    MediaPlayerDeviceClass,
+    DOMAIN as MEDIA_PLAYER,
+)
+
 from homeassistant.components.climate import DOMAIN as CLIMATE
 
 from .connection import OWNSession, OWNEventSession, OWNCommandSession, OWNGateway
@@ -39,6 +44,8 @@ from .message import (
     OWNAuxEvent,
     OWNHeatingEvent,
     OWNHeatingCommand,
+    OWNAudioEvent,
+    OWNAudioCommand,
     OWNCENPlusEvent,
     OWNCENEvent,
     OWNGatewayEvent,
@@ -154,7 +161,7 @@ class MyHOMEGatewayHandler:
                 else:
                     self.hass.bus.async_fire("myhome_message_event", {"gateway": str(self.gateway.host), "message": str(message)})
             if not isinstance(message, OWNMessage):
-                    LOGGER.debug(
+                    LOGGER.warning(
                     "%s Data received is not a message: `%s`",
                     self.log_id,
                     message,
@@ -176,12 +183,37 @@ class MyHOMEGatewayHandler:
                             self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][BINARY_SENSOR][message.entity][CONF_ENTITIES][_entity].handle_event(message)
                 else:
                     continue
+            elif isinstance(message, OWNAudioEvent):
+                if MEDIA_PLAYER in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]: 
+                    if message.entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER]:
+                        for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][message.entity][CONF_ENTITIES]:
+                            if isinstance(
+                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][message.entity][CONF_ENTITIES][_entity],
+                                MyHOMEEntity,
+                            ):
+                                self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][message.entity][CONF_ENTITIES][_entity].handle_event(message)
+                    else:
+                        if message.isSource:
+                            LOGGER.debug("Source message received")
+                            for _message_entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER]:
+                                for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][_message_entity][CONF_ENTITIES]:
+                                    if isinstance(
+                                        self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][_message_entity][CONF_ENTITIES][_entity],
+                                        MyHOMEEntity,
+                                    ):
+                                        LOGGER.debug("Send source message received")
+                                        self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][_message_entity][CONF_ENTITIES][_entity].handle_event(message)
+                        else:
+                            continue                
+                else:
+                    continue                
             elif (
                 isinstance(message, OWNLightingEvent)
                 or isinstance(message, OWNAutomationEvent)
                 or isinstance(message, OWNDryContactEvent)
                 or isinstance(message, OWNAuxEvent)
                 or isinstance(message, OWNHeatingEvent)
+                or isinstance(message, OWNAudioEvent)
             ):
                 if not message.is_translation:
                     is_event = False
