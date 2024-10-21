@@ -27,7 +27,7 @@ from .const import (
 from .validate import config_schema, format_mac
 from .gateway import MyHOMEGatewayHandler
 
-PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor"]
+PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player"]
 
 
 async def async_setup(hass, config):
