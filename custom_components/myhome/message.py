@@ -29,6 +29,9 @@ MESSAGE_TYPE_MOTION = "motion_detected"
 MESSAGE_TYPE_PIR_SENSITIVITY = "pir_sensitivity"
 MESSAGE_TYPE_ILLUMINANCE = "illuminance_value"
 MESSAGE_TYPE_MOTION_TIMEOUT = "motion_timeout"
+MESSAGE_TYPE_AUDIO_VOLUME = "volume"
+MESSAGE_TYPE_AUDIO_STATE = "state"
+MESSAGE_TYPE_AUDIO_STATION = "station"
 
 CLIMATE_MODE_OFF = "off"
 CLIMATE_MODE_HEAT = "heat"
@@ -36,6 +39,10 @@ CLIMATE_MODE_COOL = "cool"
 CLIMATE_MODE_AUTO = "auto"
 
 PIR_SENSITIVITY_MAPPING = ["low", "medium", "high", "very high"]
+
+from .const import (
+    LOGGER
+)
 
 
 class OWNMessage:
@@ -368,6 +375,8 @@ class OWNEvent(OWNMessage):
                 return OWNSceneEvent(data)
             elif _who == 18:
                 return OWNEnergyEvent(data)
+            elif _who == 22:
+                return OWNAudioEvent(data)
             elif _who == 25:
                 _where = re.match(r"^\*.+\*(?P<where>\d+)##$", data).group("where")
                 if _where.startswith("2"):
@@ -622,6 +631,66 @@ class OWNAutomationEvent(OWNEvent):
     def current_position(self):
         return self._position
 
+class OWNAudioEvent(OWNEvent):
+    def __init__(self, data):
+        super().__init__(data)
+
+        self._type = None
+        self._isSource = False
+        if self._where == "3": # Speaker
+            self._where = self._where_param[0] + self._where_param[1]
+            # LOGGER.debug( "OWNAudioEvent(Speaker), where=%s, what=%s, who=%s, dimension=%s, family=%s, entity=%s", self._where, self._what, self._who, self._dimension, self._family, self.entity)
+            if self._dimension is not None:
+                if self._dimension == 1:
+                    # Volume
+                    self._type = MESSAGE_TYPE_AUDIO_VOLUME
+                    self._volume = int(self._dimension_value[0])
+                    self._human_readable_log = (f"Volume Event {self._volume}")
+                elif self._dimension == 12:
+                    # State
+                    self._type = MESSAGE_TYPE_AUDIO_STATE
+                    self._state = int(self._dimension_value[0])
+                    self._human_readable_log = (f"State Event {self._state}")
+                else:
+                    LOGGER.debug( "OWNAudioEvent(Speaker/Unknown), where=%s, what=%s, who=%s, dimension=%s, family=%s, entity=%s", self._where, self._what, self._who, self._dimension, self._family, self.entity)
+                    for param in self._dimension_param:
+                        LOGGER.debug("OWNAudioEvent, dimension_param %s", param)
+                    for paramv in self._dimension_value:
+                        LOGGER.debug("OWNAudioEvent, dimension_value %s", paramv)
+        if self._where == "5": # Source
+            self._isSource = True
+            if self._dimension == 5:
+                self._type = MESSAGE_TYPE_AUDIO_STATION
+                self._station = self._dimension_value[1][:-2] + '.' + self._dimension_value[1][-2:]
+                self._human_readable_log = (f"Station change to {self._station}")
+            LOGGER.debug( "OWNAudioEvent(Source/2), where=%s, what=%s, who=%s, dimension=%s, family=%s, entity=%s", self._where, self._what, self._who, self._dimension, self._family, self.entity)
+        if self._where == "2": # Source
+            self._isSource = True
+            LOGGER.debug( "OWNAudioEvent(Source/5), where=%s, what=%s, who=%s, dimension=%s, family=%s, entity=%s", self._where, self._what, self._who, self._dimension, self._family, self.entity)
+        # *22*2#4#5*5#2#1## / Source => 1
+    @property
+    def unique_id(self) -> str:
+        return f"{self._who}-{self._where}"
+
+    @property
+    def message_type(self):
+        return self._type
+
+    @property
+    def volume(self):
+        return self._volume
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def isSource(self):
+        return self._isSource
+
+    @property
+    def station(self):
+        return self._station
 
 class OWNHeatingEvent(OWNEvent):
     def __init__(self, data):
@@ -1646,7 +1715,7 @@ class OWNCommand(OWNMessage):
             elif _who == 18:
                 return OWNEnergyCommand(data)
             elif _who == 22:
-                return cls(data)
+                return OWNAudioCommand(data)
             elif _who == 24:
                 return cls(data)
             elif _who == 25:
@@ -1776,6 +1845,69 @@ class OWNAutomationCommand(OWNCommand):
         return message
 
 
+class OWNAudioCommand(OWNCommand):
+    @classmethod
+    def status(cls, where):
+        message = cls(f"*#22*5#2#1*5##*#22*3#{where[0]}#{where[1]}##")
+        message._human_readable_log = f"Requesting frequency and status."
+        return message
+
+    @classmethod
+    def select_source(cls, where, src):
+        zone = where[0]
+        if src == "Radio":
+            message = cls(f"*22*0#4#{zone}*2#1##*22*0#4#{zone}*2#2##*22*0#4#{zone}*2#3##*22*0#4#{zone}*2#4##*22*1#4#{zone}*2#1##")
+        else:
+            message = cls(f"*22*0#4#{zone}*2#1##*22*0#4#{zone}*2#2##*22*0#4#{zone}*2#3##*22*0#4#{zone}*2#4##*22*1#4#{zone}*2#2##")
+        return message
+
+    @classmethod
+    def play(cls, where):
+        zone = where[0]
+        point = where[1]
+        message = cls(f"*22*1#4#{zone}*3#{zone}#{point}##")
+        return message
+    
+    @classmethod
+    def stop(cls, where):
+        zone = where[0]
+        point = where[1]
+        message = cls(f"*22*0#4#{zone}*3#{zone}#{point}##")
+        return message
+    
+    @classmethod
+    def volume_set(cls, where, vol):
+        zone = where[0]
+        point = where[1]
+        vint = int(vol * 31.0)
+        message = cls(f"*#22*3#{zone}#{point}*#1*{vint}##")
+        return message
+    
+    
+    @classmethod
+    def volume_up(cls, where):
+        zone = where[0]
+        point = where[1]
+        message = cls(f"*22*3#1*3#{zone}#{point}##")
+        return message
+
+    @classmethod
+    def volume_down(cls, where):
+        zone = where[0]
+        point = where[1]
+        message = cls(f"*22*4#1*3#{zone}#{point}##")
+        return message
+ 
+    @classmethod
+    def next_track(cls, where):
+        message = cls(f"*22*9#*2#1##")
+        return message
+       
+    @classmethod
+    def prev_track(cls, where):
+        message = cls(f"*22*10#*2#1##")
+        return message
+       
 class OWNHeatingCommand(OWNCommand):
     @classmethod
     def status(cls, where):
