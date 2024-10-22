@@ -194,14 +194,12 @@ class MyHOMEGatewayHandler:
                                 self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][message.entity][CONF_ENTITIES][_entity].handle_event(message)
                     else:
                         if message.isSource:
-                            LOGGER.debug("Source message received")
                             for _message_entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER]:
                                 for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][_message_entity][CONF_ENTITIES]:
                                     if isinstance(
                                         self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][_message_entity][CONF_ENTITIES][_entity],
                                         MyHOMEEntity,
                                     ):
-                                        LOGGER.debug("Send source message received")
                                         self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][MEDIA_PLAYER][_message_entity][CONF_ENTITIES][_entity].handle_event(message)
                         else:
                             continue                
