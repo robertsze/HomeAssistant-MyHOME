@@ -32,6 +32,7 @@ MESSAGE_TYPE_MOTION_TIMEOUT = "motion_timeout"
 MESSAGE_TYPE_AUDIO_VOLUME = "volume"
 MESSAGE_TYPE_AUDIO_STATE = "state"
 MESSAGE_TYPE_AUDIO_STATION = "station"
+MESSAGE_TYPE_AUDIO_SOURCE = "source"
 
 CLIMATE_MODE_OFF = "off"
 CLIMATE_MODE_HEAT = "heat"
@@ -636,10 +637,13 @@ class OWNAudioEvent(OWNEvent):
         super().__init__(data)
 
         self._type = None
+        self._source = None
         self._isSource = False
+        
+        LOGGER.debug( "OWNAudioEvent, where=%s, where_param=%s, what=%s, what_param=%s, who=%s, dimension=%s, dimension_param=%s, dimension_value=%s, family=%s, entity=%s", self._where, self._where_param, self._what, self._what_param, self._who, self._dimension, self._dimension_param, self._dimension_value, self._family, self.entity)
+
         if self._where == "3": # Speaker
             self._where = self._where_param[0] + self._where_param[1]
-            # LOGGER.debug( "OWNAudioEvent(Speaker), where=%s, what=%s, who=%s, dimension=%s, family=%s, entity=%s", self._where, self._what, self._who, self._dimension, self._family, self.entity)
             if self._dimension is not None:
                 if self._dimension == 1:
                     # Volume
@@ -651,23 +655,21 @@ class OWNAudioEvent(OWNEvent):
                     self._type = MESSAGE_TYPE_AUDIO_STATE
                     self._state = int(self._dimension_value[0])
                     self._human_readable_log = (f"State Event {self._state}")
-                else:
-                    LOGGER.debug( "OWNAudioEvent(Speaker/Unknown), where=%s, what=%s, who=%s, dimension=%s, family=%s, entity=%s", self._where, self._what, self._who, self._dimension, self._family, self.entity)
-                    for param in self._dimension_param:
-                        LOGGER.debug("OWNAudioEvent, dimension_param %s", param)
-                    for paramv in self._dimension_value:
-                        LOGGER.debug("OWNAudioEvent, dimension_value %s", paramv)
         if self._where == "5": # Source
             self._isSource = True
             if self._dimension == 5:
                 self._type = MESSAGE_TYPE_AUDIO_STATION
-                self._station = self._dimension_value[1][:-2] + '.' + self._dimension_value[1][-2:]
+                self._station = self._dimension_value[1][:-2] + '.' + self._dimension_value[1][-2:] + " MHz"
                 self._human_readable_log = (f"Station change to {self._station}")
-            LOGGER.debug( "OWNAudioEvent(Source/2), where=%s, what=%s, who=%s, dimension=%s, family=%s, entity=%s", self._where, self._what, self._who, self._dimension, self._family, self.entity)
-        if self._where == "2": # Source
-            self._isSource = True
-            LOGGER.debug( "OWNAudioEvent(Source/5), where=%s, what=%s, who=%s, dimension=%s, family=%s, entity=%s", self._where, self._what, self._who, self._dimension, self._family, self.entity)
-        # *22*2#4#5*5#2#1## / Source => 1
+            if self._what == 2 and self._dimension is None and self._where_param is not None and len(self._where_param) == 2:
+                self._type = MESSAGE_TYPE_AUDIO_SOURCE
+                if self._where_param[1] == "2":
+                    self._source = "Stream"
+                else:
+                    self._source = "Radio"
+                LOGGER.debug("source change %s/%s", self._where_param[1], self._source)
+                self._human_readable_log = (f"Source change to {self._source}")
+                
     @property
     def unique_id(self) -> str:
         return f"{self._who}-{self._where}"
@@ -691,6 +693,10 @@ class OWNAudioEvent(OWNEvent):
     @property
     def station(self):
         return self._station
+        
+    @property
+    def source(self):
+        return self._source
 
 class OWNHeatingEvent(OWNEvent):
     def __init__(self, data):
@@ -1856,9 +1862,9 @@ class OWNAudioCommand(OWNCommand):
     def select_source(cls, where, src):
         zone = where[0]
         if src == "Radio":
-            message = cls(f"*22*0#4#{zone}*2#1##*22*0#4#{zone}*2#2##*22*0#4#{zone}*2#3##*22*0#4#{zone}*2#4##*22*1#4#{zone}*2#1##")
+            message = cls(f"*22*0#4#{zone}*2#2##*22*1#4#{zone}*2#1##")
         else:
-            message = cls(f"*22*0#4#{zone}*2#1##*22*0#4#{zone}*2#2##*22*0#4#{zone}*2#3##*22*0#4#{zone}*2#4##*22*1#4#{zone}*2#2##")
+            message = cls(f"*22*0#4#{zone}*2#1##*22*1#4#{zone}*2#2##")
         return message
 
     @classmethod
