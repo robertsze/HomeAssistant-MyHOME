@@ -19,7 +19,8 @@ from .message import (
     OWNAudioEvent,
     MESSAGE_TYPE_AUDIO_VOLUME,
     MESSAGE_TYPE_AUDIO_STATE,
-    MESSAGE_TYPE_AUDIO_STATION
+    MESSAGE_TYPE_AUDIO_STATION,
+    MESSAGE_TYPE_AUDIO_SOURCE,
 )
 
 from .const import (
@@ -110,7 +111,7 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
         )
         self._state = MediaPlayerState.OFF
         self._attr_volume_level = 0.5
-        self.active_source = "Radio"
+        self._active_source = "Radio"
         self._station = "Unknown Title"
         
     @property
@@ -119,7 +120,7 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
 
     @property
     def source(self) -> str | None:
-        return self.active_source
+        return self._active_source
         
     @property
     def source_list(self) -> list[str]:
@@ -135,14 +136,16 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
 
     @property
     def media_title(self) -> str | None:
-        return self._station
+        if self._active_source == "Radio":
+            return self._station
+        else:
+            return "Stream"
 
     async def async_update(self):
         await self._gateway_handler.send_status_request(OWNAudioCommand.status(where=self._where))
         self.schedule_update_ha_state()
 
     async def async_select_source(self, source: str) -> None:
-        self.active_source = source
         await self._gateway_handler.send(OWNAudioCommand.select_source(where=self._where, src=source))
         self.schedule_update_ha_state()
 
@@ -185,6 +188,8 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
     def handle_event(self, message: OWNAudioEvent):
         if message.message_type == MESSAGE_TYPE_AUDIO_STATION:
             self._station = message.station
+        if message.message_type == MESSAGE_TYPE_AUDIO_SOURCE:
+            self._active_source = message.source
         if message.message_type == MESSAGE_TYPE_AUDIO_VOLUME:
             if message.volume == 0:
                 self._attr_volume_level = 0
