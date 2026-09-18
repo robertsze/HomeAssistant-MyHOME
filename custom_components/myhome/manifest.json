@@ -2,7 +2,7 @@
   "domain": "myhome",
   "integration_type": "hub",
   "name": "MyHOME",
-  "version": "0.9.4-robertsze",
+  "version": "1.0.5-robertsze",
   "config_flow": true,
   "documentation": "https://github.com/robertsze/HomeAssistant-MyHOME",
   "issue_tracker": "https://github.com/robertsze/HomeAssistant-MyHOME/issues",
@@ -64,6 +64,6 @@
     }
   ],
   "codeowners": [
-    "@anotherjulien"
+    "@robertszeleney"
   ]
 }
